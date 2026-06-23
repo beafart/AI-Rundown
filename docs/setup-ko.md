@@ -11,6 +11,8 @@ NAVER_FOLDER=AI rundown
 APP_API_TOKEN=원하는_토큰
 FETCH_DAYS=14
 FETCH_LIMIT=50
+MAX_ARTICLES_PER_SYNC=1
+MAX_SENTENCES_PER_ARTICLE=40
 ```
 
 `APP_API_TOKEN`은 Android 앱에서 노트북 백엔드에 직접 붙을 때만 씁니다.
@@ -49,6 +51,8 @@ python backend\app.py --sync-once
 ```
 
 현재 설정은 `FETCH_DAYS=14`라서 실행할 때마다 최근 14일치 `AI rundown` 폴더를 훑고, Supabase에 이미 있는 메일 UID는 건너뜁니다. 그래서 7시에 노트북이 꺼져 있어도 다음에 켜졌을 때 밀린 메일을 처리합니다.
+
+처음 테스트할 때는 `MAX_ARTICLES_PER_SYNC=1`로 두는 것을 추천합니다. 안정적으로 돌아가는 것을 확인한 뒤 `3`, `5`처럼 늘리면 됩니다.
 
 처음 테스트할 때 실제 메일 대신 샘플 기사를 만들 수 있습니다.
 

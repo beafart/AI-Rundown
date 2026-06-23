@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import re
+import sys
 import threading
 import time
 import traceback
@@ -41,6 +42,8 @@ def load_env(path: Path) -> dict[str, str]:
 
 ENV = load_env(ROOT.parent / ".env")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
 def build_store(env: dict[str, str]) -> Any:
@@ -102,16 +105,27 @@ def analyze_article(article_id: int) -> None:
     article = STORE.get_article(article_id)
     if not article:
         return
+    print(f"[article {article_id}] analyzing: {article.get('subject', 'Untitled')}", flush=True)
     STORE.update_article_status(article_id, "analyzing", None)
     sections = parse_newsletter(article["text"])
     STORE.replace_sections(article_id, sections)
 
+    max_sentences = int(ENV.get("MAX_SENTENCES_PER_ARTICLE", "40"))
+    analyzed_sentences = 0
     for section in STORE.list_sections(article_id):
         sentences = split_sentences(section["body"])
         for index, sentence in enumerate(sentences):
+            if analyzed_sentences >= max_sentences:
+                print(f"[article {article_id}] sentence cap reached: {max_sentences}", flush=True)
+                STORE.update_article_status(article_id, "ready", None)
+                return
             existing = STORE.find_sentence(article_id, section["id"], index)
             if existing:
                 continue
+            print(
+                f"[article {article_id}] sentence {analyzed_sentences + 1}/{max_sentences}: {sentence[:90]}",
+                flush=True,
+            )
             try:
                 result = analyze_sentence(sentence, ENV)
             except Exception as exc:
@@ -130,7 +144,9 @@ def analyze_article(article_id: int) -> None:
                 chunks=result.get("chunks", []),
                 vocabulary=result.get("vocabulary", []),
             )
+            analyzed_sentences += 1
     STORE.update_article_status(article_id, "ready", None)
+    print(f"[article {article_id}] ready ({analyzed_sentences} sentences analyzed)", flush=True)
 
 
 def split_sentences(text: str) -> list[str]:
@@ -143,13 +159,19 @@ def split_sentences(text: str) -> list[str]:
 
 def sync_mail() -> dict[str, Any]:
     messages = fetch_rundown_messages(ENV)
+    max_articles = int(ENV.get("MAX_ARTICLES_PER_SYNC", "1"))
     created: list[int] = []
     failed: list[int] = []
     skipped = 0
     for message in messages:
+        if len(created) >= max_articles:
+            print(f"Article cap reached: MAX_ARTICLES_PER_SYNC={max_articles}", flush=True)
+            break
+        print(f"Checking message: {message.get('subject', 'Untitled')}", flush=True)
         article_id = STORE.upsert_article(message)
         if article_id is None:
             skipped += 1
+            print("Already ready; skipped", flush=True)
             continue
         created.append(article_id)
         try:
