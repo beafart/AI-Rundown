@@ -6,6 +6,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -40,3 +43,14 @@ jobs:
         with:
           name: ai-rundown-reader-debug-apk
           path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Publish latest APK release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete latest-apk --yes --cleanup-tag || true
+          gh release create latest-apk \
+            mobile/android/app/build/outputs/apk/debug/app-debug.apk \
+            --title "Latest Android APK" \
+            --notes "Debug APK for personal installation. Download app-debug.apk on your Android phone."
