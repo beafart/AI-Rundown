@@ -74,6 +74,7 @@ This repo includes a GitHub Actions workflow that builds a debug APK:
 ```
 
 After pushing to GitHub, open the Actions tab and download the `ai-rundown-reader-debug-apk` artifact.
+For prefilled app settings, add repository secrets named `APP_SUPABASE_URL` and `APP_SUPABASE_ANON_KEY`; the workflow injects them into the APK at build time.
 
 ## Notes
 

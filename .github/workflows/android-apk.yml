@@ -34,6 +34,28 @@ jobs:
         with:
           gradle-version: "8.10.2"
 
+      - name: Inject app defaults
+        env:
+          APP_SUPABASE_URL: ${{ secrets.APP_SUPABASE_URL }}
+          APP_SUPABASE_ANON_KEY: ${{ secrets.APP_SUPABASE_ANON_KEY }}
+        run: |
+          python - <<'PY'
+          import os
+          import xml.sax.saxutils as x
+          values_dir = "mobile/android/app/src/main/res/values"
+          os.makedirs(values_dir, exist_ok=True)
+          url = os.environ.get("APP_SUPABASE_URL", "")
+          anon = os.environ.get("APP_SUPABASE_ANON_KEY", "")
+          xml = f'''<resources>
+              <string name="app_name">AI Rundown</string>
+              <string name="default_supabase_url">{x.escape(url)}</string>
+              <string name="default_supabase_anon_key">{x.escape(anon)}</string>
+          </resources>
+          '''
+          with open(os.path.join(values_dir, "strings.xml"), "w", encoding="utf-8") as f:
+              f.write(xml)
+          PY
+
       - name: Build debug APK
         working-directory: mobile/android
         run: gradle :app:assembleDebug --no-daemon

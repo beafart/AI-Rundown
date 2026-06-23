@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">AI Rundown</string>
+    <string name="default_supabase_url"></string>
+    <string name="default_supabase_anon_key"></string>
+</resources>

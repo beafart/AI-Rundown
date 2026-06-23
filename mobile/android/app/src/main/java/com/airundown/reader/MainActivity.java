@@ -58,6 +58,7 @@ public class MainActivity extends Activity {
     private EditText supabaseUrlInput;
     private EditText supabaseKeyInput;
     private ProgressBar progress;
+    private TextView busyText;
     private JSONArray cachedArticles = new JSONArray();
     private JSONObject currentArticle;
     private String currentView = "home";
@@ -147,14 +148,14 @@ public class MainActivity extends Activity {
         supabaseUrlLabel.setPadding(0, dp(10), 0, dp(4));
         panel.addView(supabaseUrlLabel);
         supabaseUrlInput = input("https://your-project-ref.supabase.co");
-        supabaseUrlInput.setText(prefs.getString(KEY_SUPABASE_URL, ""));
+        supabaseUrlInput.setText(prefs.getString(KEY_SUPABASE_URL, defaultSupabaseUrl()));
         panel.addView(supabaseUrlInput);
 
         TextView supabaseKeyLabel = smallLabel("Supabase anon key");
         supabaseKeyLabel.setPadding(0, dp(10), 0, dp(4));
         panel.addView(supabaseKeyLabel);
         supabaseKeyInput = input("anon or publishable key");
-        supabaseKeyInput.setText(prefs.getString(KEY_SUPABASE_ANON_KEY, ""));
+        supabaseKeyInput.setText(prefs.getString(KEY_SUPABASE_ANON_KEY, defaultSupabaseAnonKey()));
         supabaseKeyInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         panel.addView(supabaseKeyInput);
 
@@ -240,6 +241,7 @@ public class MainActivity extends Activity {
         TextView meta = body(article.optString("received_at", ""));
         meta.setTextColor(muted);
         root.addView(meta);
+        addBusyIndicator();
 
         String html = article.optString("html", "");
         if (!html.trim().isEmpty()) {
@@ -553,15 +555,23 @@ public class MainActivity extends Activity {
     }
 
     private void reanalyze(int articleId) {
+        if (cleanBaseUrl().isEmpty()) {
+            toast("Set Backend URL first");
+            return;
+        }
+        toast("Re-analysis started. This can take several minutes.");
+        setBusyMessage("Re-analyzing with local Ollama. Keep the backend running.");
         request("POST", "/api/articles/" + articleId + "/reanalyze", "{}", new ApiCallback() {
             @Override
             public void ok(JSONObject json) {
+                setBusyMessage("");
                 toast("Analysis refreshed");
                 openArticle(articleId);
             }
 
             @Override
             public void fail(String message) {
+                setBusyMessage("");
                 toast(message);
             }
         });
@@ -753,7 +763,7 @@ public class MainActivity extends Activity {
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod(method);
                 conn.setConnectTimeout(8000);
-                conn.setReadTimeout(240000);
+                conn.setReadTimeout(900000);
                 conn.setRequestProperty("Accept", "application/json");
                 String token = tokenInput == null ? prefs.getString(KEY_TOKEN, "") : tokenInput.getText().toString().trim();
                 if (!token.isEmpty()) {
@@ -847,6 +857,16 @@ public class MainActivity extends Activity {
         if (progress != null) {
             progress.setVisibility(busy ? View.VISIBLE : View.GONE);
         }
+        if (!busy && busyText != null && busyText.getText().toString().trim().isEmpty()) {
+            busyText.setVisibility(View.GONE);
+        }
+    }
+
+    private void setBusyMessage(String message) {
+        if (busyText != null) {
+            busyText.setText(message);
+            busyText.setVisibility(message == null || message.trim().isEmpty() ? View.GONE : View.VISIBLE);
+        }
     }
 
     private String cleanBaseUrl() {
@@ -860,13 +880,21 @@ public class MainActivity extends Activity {
     }
 
     private String cleanSupabaseUrl() {
-        String value = supabaseUrlInput == null ? prefs.getString(KEY_SUPABASE_URL, "") : supabaseUrlInput.getText().toString().trim();
+        String value = supabaseUrlInput == null ? prefs.getString(KEY_SUPABASE_URL, defaultSupabaseUrl()) : supabaseUrlInput.getText().toString().trim();
         while (value.endsWith("/")) value = value.substring(0, value.length() - 1);
         return value;
     }
 
     private String cleanSupabaseAnonKey() {
-        return supabaseKeyInput == null ? prefs.getString(KEY_SUPABASE_ANON_KEY, "") : supabaseKeyInput.getText().toString().trim();
+        return supabaseKeyInput == null ? prefs.getString(KEY_SUPABASE_ANON_KEY, defaultSupabaseAnonKey()) : supabaseKeyInput.getText().toString().trim();
+    }
+
+    private String defaultSupabaseUrl() {
+        return getString(R.string.default_supabase_url).trim();
+    }
+
+    private String defaultSupabaseAnonKey() {
+        return getString(R.string.default_supabase_anon_key).trim();
     }
 
     private LinearLayout panel() {
@@ -928,6 +956,18 @@ public class MainActivity extends Activity {
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setPadding(0, dp(20), 0, dp(6));
         root.addView(title);
+    }
+
+    private void addBusyIndicator() {
+        progress = new ProgressBar(this);
+        progress.setVisibility(View.GONE);
+        root.addView(progress);
+
+        busyText = body("");
+        busyText.setTextColor(muted);
+        busyText.setVisibility(View.GONE);
+        busyText.setPadding(0, dp(4), 0, dp(8));
+        root.addView(busyText);
     }
 
     private LinearLayout.LayoutParams weightParams() {

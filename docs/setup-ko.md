@@ -85,6 +85,21 @@ http://192.168.0.12:8787
 
 GitHub에 푸시한 뒤 Actions 탭에서 `Build Android APK` 워크플로를 실행하거나 main 브랜치에 푸시하면 APK artifact가 생깁니다.
 
+앱을 새로 설치해도 Supabase URL과 anon key가 자동으로 들어가게 하려면 GitHub 저장소에서 아래 Secrets를 추가하세요.
+
+```text
+Settings -> Secrets and variables -> Actions -> New repository secret
+```
+
+추가할 이름:
+
+```text
+APP_SUPABASE_URL
+APP_SUPABASE_ANON_KEY
+```
+
+`APP_SUPABASE_URL`에는 `https://psywgcagllmkffwaflkq.supabase.co`처럼 `/rest/v1` 없는 URL을 넣고, `APP_SUPABASE_ANON_KEY`에는 Supabase publishable key를 넣습니다. `service_role` 키는 절대 넣지 마세요.
+
 다운로드할 artifact 이름:
 
 ```text
