@@ -66,6 +66,11 @@ def parse_newsletter(text: str) -> list[dict[str, str | int]]:
 
 def normalize(text: str) -> str:
     text = text.replace("\r", "\n")
+    text = re.sub(r"\^\*\*\[[^\]]+\]\([^)]+\)\*\*\^", " ", text)
+    text = re.sub(r"\[[^\]]+\]\([^)]+\)", " ", text)
+    text = re.sub(r"View image:\s*\([^)]+\)", " ", text, flags=re.IGNORECASE)
+    text = re.sub(r"Follow image link:\s*\([^)]+\)", " ", text, flags=re.IGNORECASE)
+    text = re.sub(r"Caption:\s*-+", " ", text, flags=re.IGNORECASE)
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()

@@ -11,6 +11,8 @@ import android.os.Bundle;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -236,6 +238,13 @@ public class MainActivity extends Activity {
         meta.setTextColor(muted);
         root.addView(meta);
 
+        String html = article.optString("html", "");
+        if (!html.trim().isEmpty()) {
+            Button original = button("Original Email", 0xFF4F6F52);
+            original.setOnClickListener(v -> renderOriginalEmail(article));
+            root.addView(original);
+        }
+
         JSONArray sections = article.optJSONArray("sections");
         if (sections == null || sections.length() == 0) {
             TextView empty = body("This article has no analysis yet. Tap Re-analyze.");
@@ -254,6 +263,38 @@ public class MainActivity extends Activity {
         Button reanalyze = button("Re-analyze", warm);
         reanalyze.setOnClickListener(v -> reanalyze(article.optInt("id")));
         root.addView(reanalyze);
+    }
+
+    private void renderOriginalEmail(JSONObject article) {
+        root.removeAllViews();
+
+        Button back = button("Back to Analysis", accent);
+        back.setOnClickListener(v -> renderArticle(article));
+        root.addView(back);
+
+        TextView title = new TextView(this);
+        title.setText(article.optString("subject", "Original Email"));
+        title.setTextColor(ink);
+        title.setTextSize(22);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setPadding(0, dp(16), 0, dp(12));
+        root.addView(title);
+
+        WebView webView = new WebView(this);
+        webView.setWebViewClient(new WebViewClient());
+        webView.getSettings().setJavaScriptEnabled(false);
+        webView.getSettings().setLoadWithOverviewMode(true);
+        webView.getSettings().setUseWideViewPort(true);
+        webView.getSettings().setBuiltInZoomControls(true);
+        webView.getSettings().setDisplayZoomControls(false);
+        webView.setBackgroundColor(0xFFFFFFFF);
+
+        String html = article.optString("html", "");
+        webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null);
+
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(900));
+        params.setMargins(0, dp(8), 0, dp(12));
+        root.addView(webView, params);
     }
 
     private void addSection(JSONObject section) {
