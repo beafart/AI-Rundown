@@ -48,6 +48,8 @@ class Storage:
                     ordinal integer not null,
                     source_text text not null,
                     translation text not null,
+                    natural_paraphrase text not null default '',
+                    key_point text not null default '',
                     chunks_json text not null,
                     vocabulary_json text not null
                 );
@@ -62,6 +64,15 @@ class Storage:
                 );
                 """
             )
+            self.ensure_column(conn, "sentences", "natural_paraphrase", "text not null default ''")
+            self.ensure_column(conn, "sentences", "key_point", "text not null default ''")
+
+    def ensure_column(self, conn: sqlite3.Connection, table: str, column: str, spec: str) -> None:
+        try:
+            conn.execute(f"alter table {table} add column {column} {spec}")
+        except sqlite3.OperationalError as exc:
+            if "duplicate column" not in str(exc).lower():
+                raise
 
     def upsert_article(self, message: dict[str, Any], force: bool = False) -> int | None:
         with self.connect() as conn:
@@ -142,14 +153,16 @@ class Storage:
         ordinal: int,
         source_text: str,
         translation: str,
+        natural_paraphrase: str,
+        key_point: str,
         chunks: list[dict[str, Any]],
         vocabulary: list[dict[str, Any]],
     ) -> int:
         with self.connect() as conn:
             cur = conn.execute(
                 """
-                insert into sentences(article_id, section_id, ordinal, source_text, translation, chunks_json, vocabulary_json)
-                values (?, ?, ?, ?, ?, ?, ?)
+                insert into sentences(article_id, section_id, ordinal, source_text, translation, natural_paraphrase, key_point, chunks_json, vocabulary_json)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     article_id,
@@ -157,6 +170,8 @@ class Storage:
                     ordinal,
                     source_text,
                     translation,
+                    natural_paraphrase,
+                    key_point,
                     json.dumps(chunks, ensure_ascii=False),
                     json.dumps(vocabulary, ensure_ascii=False),
                 ),

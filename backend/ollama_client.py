@@ -10,18 +10,37 @@ SYSTEM_PROMPT = """
 You are an English reading tutor for a Korean learner.
 Analyze the given English sentence.
 Return valid JSON only. Do not include markdown.
+Write Korean explanations in a clear chunk-by-chunk tutoring style.
+Use common Korean tech translations and preserve named entities accurately:
+- Microsoft AI CEO Mustafa Suleyman = 마이크로소프트 AI 부문 CEO 무스타파 술레이만
+- Anthropic = 앤트로픽
+- Claude = 클로드
+- instructions = 지침서 or 지침
+- constitution docs = 헌장 문서 or Constitution 문서
+- consciousness = 의식 or 자각
+- call A B = A를 B라고 부르다/평가하다
+Never mistranslate Claude as cloud, instructions as instance, or Anthropic as Android/andropic.
 Schema:
 {
   "sentence": "original sentence",
-  "translation": "natural Korean translation",
+  "translation": "full natural Korean translation",
+  "natural_paraphrase": "more natural Korean paraphrase, with inferred nuance if helpful",
+  "key_point": "one or two Korean sentences explaining the core point or nuance",
   "chunks": [
-    {"text": "English chunk", "meaning": "Korean meaning", "note": "short grammar/usage note or empty string"}
+    {
+      "text": "English chunk in sentence order",
+      "meaning": "Korean chunk meaning",
+      "notes": ["word/grammar/context explanation in Korean"]
+    }
   ],
   "vocabulary": [
     {"term": "word or phrase", "meaning": "Korean meaning with useful note or example in parentheses if helpful"}
   ]
 }
-Pick useful vocabulary and expressions only. Avoid obvious words unless important.
+Chunk the sentence into meaningful units, not word-by-word fragments.
+Use the style:
+English chunk -> Korean meaning -> useful words, expressions, grammar, and context notes.
+Include named entities if they matter. Avoid obvious words unless important.
 """.strip()
 
 ANALYSIS_SCHEMA = {
@@ -29,6 +48,8 @@ ANALYSIS_SCHEMA = {
     "properties": {
         "sentence": {"type": "string"},
         "translation": {"type": "string"},
+        "natural_paraphrase": {"type": "string"},
+        "key_point": {"type": "string"},
         "chunks": {
             "type": "array",
             "items": {
@@ -36,9 +57,12 @@ ANALYSIS_SCHEMA = {
                 "properties": {
                     "text": {"type": "string"},
                     "meaning": {"type": "string"},
-                    "note": {"type": "string"},
+                    "notes": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
                 },
-                "required": ["text", "meaning", "note"],
+                "required": ["text", "meaning", "notes"],
             },
         },
         "vocabulary": {
@@ -53,7 +77,7 @@ ANALYSIS_SCHEMA = {
             },
         },
     },
-    "required": ["sentence", "translation", "chunks", "vocabulary"],
+    "required": ["sentence", "translation", "natural_paraphrase", "key_point", "chunks", "vocabulary"],
 }
 
 
@@ -70,7 +94,7 @@ def analyze_sentence(sentence: str, env: dict[str, str]) -> dict[str, Any]:
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": "/no_think\n" + sentence},
         ],
-        "options": {"temperature": 0.2, "num_predict": 700},
+        "options": {"temperature": 0.2, "num_predict": 1200},
     }
     data = json.dumps(payload).encode("utf-8")
     req = request.Request(
@@ -88,6 +112,8 @@ def analyze_sentence(sentence: str, env: dict[str, str]) -> dict[str, Any]:
         parsed = fallback_analysis(sentence, content)
     parsed.setdefault("sentence", sentence)
     parsed.setdefault("translation", "")
+    parsed.setdefault("natural_paraphrase", "")
+    parsed.setdefault("key_point", "")
     parsed.setdefault("chunks", [{"text": sentence, "meaning": parsed.get("translation", ""), "note": ""}])
     parsed.setdefault("vocabulary", [])
     return parsed
@@ -111,7 +137,9 @@ def fallback_analysis(sentence: str, content: str) -> dict[str, Any]:
     return {
         "sentence": sentence,
         "translation": "",
-        "chunks": [{"text": sentence, "meaning": "", "note": "Model did not return valid JSON. Try re-analyze."}],
+        "natural_paraphrase": "",
+        "key_point": "",
+        "chunks": [{"text": sentence, "meaning": "", "notes": ["Model did not return valid JSON. Try re-analyze."]}],
         "vocabulary": [],
         "raw": content[:1000],
     }

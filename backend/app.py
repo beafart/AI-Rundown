@@ -132,7 +132,9 @@ def analyze_article(article_id: int) -> None:
                 result = {
                     "sentence": sentence,
                     "translation": "",
-                    "chunks": [{"text": sentence, "meaning": "", "note": f"analysis failed: {exc}"}],
+                    "natural_paraphrase": "",
+                    "key_point": "",
+                    "chunks": [{"text": sentence, "meaning": "", "notes": [f"analysis failed: {exc}"]}],
                     "vocabulary": [],
                 }
             STORE.add_sentence(
@@ -141,6 +143,8 @@ def analyze_article(article_id: int) -> None:
                 ordinal=index,
                 source_text=sentence,
                 translation=result.get("translation", ""),
+                natural_paraphrase=result.get("natural_paraphrase", ""),
+                key_point=result.get("key_point", ""),
                 chunks=result.get("chunks", []),
                 vocabulary=result.get("vocabulary", []),
             )

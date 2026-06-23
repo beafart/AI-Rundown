@@ -26,9 +26,10 @@ supabase/migrations/ Supabase SQL schema
 1. Copy `.env.example` to `.env`.
 2. Fill in your Naver email and app password.
 3. Optional but recommended: create Supabase tables from `supabase/migrations/0001_ai_rundown_schema.sql`.
-4. Set `STORAGE_BACKEND=supabase` and fill `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
-5. Start Ollama and make sure `qwen3:4b` is available.
-6. Run the backend:
+4. If you already created the tables, also run `supabase/migrations/0002_sentence_summary_fields.sql`.
+5. Set `STORAGE_BACKEND=supabase` and fill `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
+6. Start Ollama and make sure `qwen3:4b` is available.
+7. Run the backend:
 
 ```powershell
 python backend\app.py

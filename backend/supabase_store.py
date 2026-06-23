@@ -117,6 +117,8 @@ class SupabaseStore:
         ordinal: int,
         source_text: str,
         translation: str,
+        natural_paraphrase: str,
+        key_point: str,
         chunks: list[dict[str, Any]],
         vocabulary: list[dict[str, Any]],
     ) -> int:
@@ -126,6 +128,8 @@ class SupabaseStore:
             "ordinal": ordinal,
             "source_text": source_text,
             "translation": translation,
+            "natural_paraphrase": natural_paraphrase,
+            "key_point": key_point,
             "chunks": chunks,
             "vocabulary": vocabulary,
         }

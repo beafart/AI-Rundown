@@ -28,6 +28,8 @@ create table if not exists public.sentences (
   ordinal integer not null,
   source_text text not null,
   translation text not null default '',
+  natural_paraphrase text not null default '',
+  key_point text not null default '',
   chunks jsonb not null default '[]'::jsonb,
   vocabulary jsonb not null default '[]'::jsonb,
   unique(article_id, section_id, ordinal)

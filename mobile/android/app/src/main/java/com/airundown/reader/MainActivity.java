@@ -60,6 +60,7 @@ public class MainActivity extends Activity {
     private ProgressBar progress;
     private JSONArray cachedArticles = new JSONArray();
     private JSONObject currentArticle;
+    private String currentView = "home";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -88,6 +89,7 @@ public class MainActivity extends Activity {
 
     private void renderHome() {
         currentArticle = null;
+        currentView = "home";
         root.removeAllViews();
         addHeader();
         addConnectionPanel();
@@ -220,6 +222,7 @@ public class MainActivity extends Activity {
 
     private void renderArticle(JSONObject article) {
         currentArticle = article;
+        currentView = "article";
         root.removeAllViews();
 
         Button back = button("Back", accent);
@@ -266,6 +269,8 @@ public class MainActivity extends Activity {
     }
 
     private void renderOriginalEmail(JSONObject article) {
+        currentArticle = article;
+        currentView = "original";
         root.removeAllViews();
 
         Button back = button("Back to Analysis", accent);
@@ -326,33 +331,36 @@ public class MainActivity extends Activity {
         reveal.setOrientation(LinearLayout.VERTICAL);
         reveal.setVisibility(View.GONE);
 
-        TextView translation = body("-> " + sentence.optString("translation", ""));
-        translation.setTextColor(accent);
-        translation.setTypeface(Typeface.DEFAULT_BOLD);
-        translation.setPadding(0, dp(10), 0, dp(8));
-        reveal.addView(translation);
+        addRevealTitle(reveal, "청크별 해석");
 
         JSONArray chunks = sentence.optJSONArray("chunks");
         if (chunks != null) {
             for (int i = 0; i < chunks.length(); i++) {
                 JSONObject chunk = chunks.optJSONObject(i);
                 if (chunk != null) {
-                    TextView chunkText = body("- " + chunk.optString("text") + " : " + chunk.optString("meaning"));
+                    TextView chunkText = body(chunk.optString("text"));
                     chunkText.setTextColor(ink);
+                    chunkText.setTypeface(Typeface.DEFAULT_BOLD);
+                    chunkText.setPadding(0, dp(10), 0, dp(2));
                     reveal.addView(chunkText);
-                    String note = chunk.optString("note", "");
-                    if (!note.isEmpty()) {
-                        TextView noteText = body("  " + note);
-                        noteText.setTextColor(muted);
-                        reveal.addView(noteText);
-                    }
+
+                    TextView meaning = body("→ " + chunk.optString("meaning"));
+                    meaning.setTextColor(accent);
+                    meaning.setPadding(0, 0, 0, dp(4));
+                    reveal.addView(meaning);
+
+                    addNotes(reveal, chunk);
                 }
             }
         }
 
+        addAnalysisBlock(reveal, "전체 해석", sentence.optString("translation", ""));
+        addAnalysisBlock(reveal, "자연스러운 의역", sentence.optString("natural_paraphrase", ""));
+        addAnalysisBlock(reveal, "핵심", sentence.optString("key_point", ""));
+
         JSONArray vocabulary = sentence.optJSONArray("vocabulary");
         if (vocabulary != null && vocabulary.length() > 0) {
-            TextView vocabTitle = smallLabel("Vocabulary");
+            TextView vocabTitle = smallLabel("단어/표현 저장");
             vocabTitle.setPadding(0, dp(10), 0, dp(4));
             reveal.addView(vocabTitle);
             for (int i = 0; i < vocabulary.length(); i++) {
@@ -372,6 +380,49 @@ public class MainActivity extends Activity {
         box.addView(toggle);
         box.addView(reveal);
         root.addView(box);
+    }
+
+    private void addNotes(LinearLayout parent, JSONObject chunk) {
+        JSONArray notes = chunk.optJSONArray("notes");
+        if (notes != null && notes.length() > 0) {
+            for (int i = 0; i < notes.length(); i++) {
+                String note = notes.optString(i, "").trim();
+                if (!note.isEmpty()) {
+                    TextView noteText = body(note);
+                    noteText.setTextColor(muted);
+                    noteText.setPadding(dp(10), 0, 0, dp(2));
+                    parent.addView(noteText);
+                }
+            }
+            return;
+        }
+
+        String note = chunk.optString("note", "").trim();
+        if (!note.isEmpty()) {
+            TextView noteText = body(note);
+            noteText.setTextColor(muted);
+            noteText.setPadding(dp(10), 0, 0, dp(2));
+            parent.addView(noteText);
+        }
+    }
+
+    private void addAnalysisBlock(LinearLayout parent, String title, String content) {
+        if (content == null || content.trim().isEmpty()) {
+            return;
+        }
+        addRevealTitle(parent, title);
+        TextView text = body(content.trim());
+        text.setTextColor(title.equals("핵심") ? warm : ink);
+        text.setPadding(0, dp(2), 0, dp(6));
+        parent.addView(text);
+    }
+
+    private void addRevealTitle(LinearLayout parent, String text) {
+        TextView title = smallLabel(text);
+        title.setTextSize(15);
+        title.setTextColor(ink);
+        title.setPadding(0, dp(14), 0, dp(4));
+        parent.addView(title);
     }
 
     private void addVocabCandidate(LinearLayout parent, JSONObject sentence, JSONObject vocab) {
@@ -889,6 +940,19 @@ public class MainActivity extends Activity {
 
     private void toast(String message) {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if ("original".equals(currentView) && currentArticle != null) {
+            renderArticle(currentArticle);
+            return;
+        }
+        if ("article".equals(currentView)) {
+            renderHome();
+            return;
+        }
+        super.onBackPressed();
     }
 
     private interface ApiCallback {

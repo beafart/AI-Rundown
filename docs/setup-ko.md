@@ -23,7 +23,10 @@ Supabase 프로젝트를 만든 뒤 SQL Editor에서 아래 파일 내용을 실
 
 ```text
 supabase/migrations/0001_ai_rundown_schema.sql
+supabase/migrations/0002_sentence_summary_fields.sql
 ```
+
+이미 `0001`을 실행했다면 `0002_sentence_summary_fields.sql`만 추가로 실행하면 됩니다.
 
 그 다음 `.env`에 아래 값을 채웁니다. `SERVICE_ROLE_KEY`는 앱에 넣으면 안 되고 노트북 `.env`에만 둡니다.
 
@@ -53,6 +56,8 @@ python backend\app.py --sync-once
 현재 설정은 `FETCH_DAYS=14`라서 실행할 때마다 최근 14일치 `AI rundown` 폴더를 훑고, Supabase에 이미 있는 메일 UID는 건너뜁니다. 그래서 7시에 노트북이 꺼져 있어도 다음에 켜졌을 때 밀린 메일을 처리합니다.
 
 처음 테스트할 때는 `MAX_ARTICLES_PER_SYNC=1`로 두는 것을 추천합니다. 안정적으로 돌아가는 것을 확인한 뒤 `3`, `5`처럼 늘리면 됩니다.
+
+청크 해석 형식이 바뀐 뒤 기존 기사는 새 형식으로 자동 변환되지 않습니다. 새 형식으로 보려면 노트북 백엔드가 켜진 상태에서 앱의 `Re-analyze`를 누르거나, Supabase의 해당 기사 상태를 `failed`로 바꾼 뒤 `--sync-once`를 다시 실행하세요.
 
 처음 테스트할 때 실제 메일 대신 샘플 기사를 만들 수 있습니다.
 
