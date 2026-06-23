@@ -3,7 +3,7 @@ from __future__ import annotations
 import email
 import imaplib
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from email.header import decode_header
 from email.message import Message
 from email.policy import default
@@ -71,7 +71,8 @@ def fetch_rundown_messages(env: dict[str, str]) -> list[dict[str, Any]]:
     host = env.get("NAVER_IMAP_HOST", "imap.naver.com")
     port = int(env.get("NAVER_IMAP_PORT", "993"))
     folder = env.get("NAVER_FOLDER", "AI rundown")
-    fetch_limit = int(env.get("FETCH_LIMIT", "3"))
+    fetch_limit = int(env.get("FETCH_LIMIT", "50"))
+    fetch_days = int(env.get("FETCH_DAYS", "14"))
     sender_filter = env.get("RUNDOWN_FROM", "").strip().lower()
 
     conn = imaplib.IMAP4_SSL(host, port)
@@ -83,13 +84,13 @@ def fetch_rundown_messages(env: dict[str, str]) -> list[dict[str, Any]]:
         if status != "OK":
             raise RuntimeError(f"Cannot select IMAP folder: {folder}")
 
-        search_query = "ALL"
-        status, data = conn.search(None, search_query)
+        since = (datetime.now() - timedelta(days=fetch_days)).strftime("%d-%b-%Y")
+        status, data = conn.search(None, "SINCE", since)
         if status != "OK":
             raise RuntimeError("IMAP search failed")
         ids = data[0].split()[-fetch_limit:]
         messages: list[dict[str, Any]] = []
-        for item in reversed(ids):
+        for item in ids:
             status, fetched = conn.fetch(item, "(RFC822)")
             if status != "OK" or not fetched:
                 continue

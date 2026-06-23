@@ -65,9 +65,9 @@ class Storage:
 
     def upsert_article(self, message: dict[str, Any], force: bool = False) -> int | None:
         with self.connect() as conn:
-            existing = conn.execute("select id from articles where uid = ?", (message["uid"],)).fetchone()
+            existing = conn.execute("select id, status from articles where uid = ?", (message["uid"],)).fetchone()
             if existing and not force:
-                return None
+                return None if existing["status"] == "ready" else int(existing["id"])
             if existing and force:
                 conn.execute("delete from articles where id = ?", (existing["id"],))
             cur = conn.execute(

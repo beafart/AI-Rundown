@@ -4,21 +4,20 @@ import argparse
 import json
 import os
 import re
-import sqlite3
 import threading
 import time
 import traceback
-from datetime import datetime, timedelta
-from http import HTTPStatus
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 
 from mail_client import fetch_rundown_messages
 from newsletter_parser import parse_newsletter
 from ollama_client import analyze_sentence
 from storage import Storage
+from supabase_store import SupabaseStore, is_supabase_configured
 
 
 ROOT = Path(__file__).resolve().parent
@@ -42,7 +41,18 @@ def load_env(path: Path) -> dict[str, str]:
 
 ENV = load_env(ROOT.parent / ".env")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
-STORE = Storage(DB_PATH)
+
+
+def build_store(env: dict[str, str]) -> Any:
+    backend = env.get("STORAGE_BACKEND", "sqlite").strip().lower()
+    if backend == "supabase" or (backend == "auto" and is_supabase_configured(env)):
+        if not is_supabase_configured(env):
+            raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for Supabase storage")
+        return SupabaseStore(env)
+    return Storage(DB_PATH)
+
+
+STORE = build_store(ENV)
 
 
 def now_iso() -> str:
@@ -127,13 +137,14 @@ def split_sentences(text: str) -> list[str]:
     cleaned = re.sub(r"\s+", " ", text).strip()
     if not cleaned:
         return []
-    parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\"'??)", cleaned)
+    parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\"'])", cleaned)
     return [part.strip() for part in parts if len(part.strip()) > 12]
 
 
 def sync_mail() -> dict[str, Any]:
     messages = fetch_rundown_messages(ENV)
     created: list[int] = []
+    failed: list[int] = []
     skipped = 0
     for message in messages:
         article_id = STORE.upsert_article(message)
@@ -141,8 +152,20 @@ def sync_mail() -> dict[str, Any]:
             skipped += 1
             continue
         created.append(article_id)
-        analyze_article(article_id)
-    return {"created": created, "skipped": skipped, "count": len(messages)}
+        try:
+            analyze_article(article_id)
+        except Exception as exc:
+            failed.append(article_id)
+            STORE.update_article_status(article_id, "failed", str(exc))
+            traceback.print_exc()
+    return {
+        "created": created,
+        "failed": failed,
+        "skipped": skipped,
+        "count": len(messages),
+        "fetch_days": int(ENV.get("FETCH_DAYS", "14")),
+        "storage": STORE.__class__.__name__,
+    }
 
 
 def seed_sample() -> int:
@@ -271,10 +294,14 @@ def schedule_loop() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed-sample", action="store_true")
+    parser.add_argument("--sync-once", action="store_true")
     args = parser.parse_args()
     if args.seed_sample:
         article_id = seed_sample()
         print(f"Seeded sample article {article_id}")
+        return
+    if args.sync_once:
+        print(json.dumps(sync_mail(), ensure_ascii=False, indent=2))
         return
 
     if ENV.get("SCHEDULE_ENABLED", "true").lower() == "true":

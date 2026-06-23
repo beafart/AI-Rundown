@@ -35,6 +35,8 @@ public class MainActivity extends Activity {
     private static final String PREFS = "ai_rundown_reader";
     private static final String KEY_BASE_URL = "base_url";
     private static final String KEY_TOKEN = "token";
+    private static final String KEY_SUPABASE_URL = "supabase_url";
+    private static final String KEY_SUPABASE_ANON_KEY = "supabase_anon_key";
     private static final String KEY_ARTICLES = "cache_articles";
     private static final String KEY_VOCAB = "local_vocab";
 
@@ -51,6 +53,8 @@ public class MainActivity extends Activity {
     private LinearLayout root;
     private EditText urlInput;
     private EditText tokenInput;
+    private EditText supabaseUrlInput;
+    private EditText supabaseKeyInput;
     private ProgressBar progress;
     private JSONArray cachedArticles = new JSONArray();
     private JSONObject currentArticle;
@@ -135,11 +139,28 @@ public class MainActivity extends Activity {
         tokenInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         panel.addView(tokenInput);
 
+        TextView supabaseUrlLabel = smallLabel("Supabase URL");
+        supabaseUrlLabel.setPadding(0, dp(10), 0, dp(4));
+        panel.addView(supabaseUrlLabel);
+        supabaseUrlInput = input("https://your-project-ref.supabase.co");
+        supabaseUrlInput.setText(prefs.getString(KEY_SUPABASE_URL, ""));
+        panel.addView(supabaseUrlInput);
+
+        TextView supabaseKeyLabel = smallLabel("Supabase anon key");
+        supabaseKeyLabel.setPadding(0, dp(10), 0, dp(4));
+        panel.addView(supabaseKeyLabel);
+        supabaseKeyInput = input("anon or publishable key");
+        supabaseKeyInput.setText(prefs.getString(KEY_SUPABASE_ANON_KEY, ""));
+        supabaseKeyInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        panel.addView(supabaseKeyInput);
+
         Button save = button("Save Settings", accent);
         save.setOnClickListener(v -> {
             prefs.edit()
                     .putString(KEY_BASE_URL, cleanBaseUrl())
                     .putString(KEY_TOKEN, tokenInput.getText().toString().trim())
+                    .putString(KEY_SUPABASE_URL, cleanSupabaseUrl())
+                    .putString(KEY_SUPABASE_ANON_KEY, cleanSupabaseAnonKey())
                     .apply();
             toast("Saved");
         });
@@ -359,6 +380,10 @@ public class MainActivity extends Activity {
     }
 
     private void refreshArticles(boolean loud) {
+        if (hasSupabase()) {
+            refreshSupabaseArticles(loud);
+            return;
+        }
         request("GET", "/api/articles", null, new ApiCallback() {
             @Override
             public void ok(JSONObject json) {
@@ -377,6 +402,10 @@ public class MainActivity extends Activity {
     }
 
     private void openArticle(int id) {
+        if (hasSupabase()) {
+            openSupabaseArticle(id);
+            return;
+        }
         request("GET", "/api/articles/" + id, null, new ApiCallback() {
             @Override
             public void ok(JSONObject json) {
@@ -473,13 +502,107 @@ public class MainActivity extends Activity {
             body.put("term", term);
             body.put("meaning", meaning);
             body.put("note", note);
-            request("POST", "/api/vocab", body.toString(), new ApiCallback() {
-                @Override public void ok(JSONObject json) { }
-                @Override public void fail(String message) { }
-            });
+            if (hasSupabase()) {
+                saveVocabToSupabase(body.toString());
+            } else {
+                request("POST", "/api/vocab", body.toString(), new ApiCallback() {
+                    @Override public void ok(JSONObject json) { }
+                    @Override public void fail(String message) { }
+                });
+            }
         } catch (JSONException ignored) {
         }
         toast("Saved");
+    }
+
+    private void refreshSupabaseArticles(boolean loud) {
+        setBusy(true);
+        new Thread(() -> {
+            try {
+                JSONArray articles = supabaseArray(
+                        "GET",
+                        "/rest/v1/articles?select=id,uid,subject,sender,received_at,status,error,created_at,updated_at&order=received_at.desc&limit=50",
+                        null
+                );
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    cachedArticles = articles;
+                    prefs.edit().putString(KEY_ARTICLES, cachedArticles.toString()).apply();
+                    renderHome();
+                    if (loud) toast("Refreshed from Supabase");
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    if (loud) toast(e.getMessage() == null ? "Supabase refresh failed" : e.getMessage());
+                });
+            }
+        }).start();
+    }
+
+    private void openSupabaseArticle(int id) {
+        setBusy(true);
+        new Thread(() -> {
+            try {
+                JSONArray articleRows = supabaseArray("GET", "/rest/v1/articles?id=eq." + id + "&select=*", null);
+                if (articleRows.length() == 0) {
+                    throw new IllegalStateException("Article not found");
+                }
+                JSONObject article = articleRows.getJSONObject(0);
+                JSONArray sections = supabaseArray(
+                        "GET",
+                        "/rest/v1/sections?article_id=eq." + id + "&select=*&order=ordinal.asc",
+                        null
+                );
+                JSONArray sentences = supabaseArray(
+                        "GET",
+                        "/rest/v1/sentences?article_id=eq." + id + "&select=*&order=section_id.asc,ordinal.asc",
+                        null
+                );
+                for (int i = 0; i < sections.length(); i++) {
+                    JSONObject section = sections.getJSONObject(i);
+                    long sectionId = section.optLong("id");
+                    JSONArray sectionSentences = new JSONArray();
+                    for (int j = 0; j < sentences.length(); j++) {
+                        JSONObject sentence = sentences.getJSONObject(j);
+                        if (sentence.optLong("section_id") == sectionId) {
+                            sectionSentences.put(sentence);
+                        }
+                    }
+                    section.put("sentences", sectionSentences);
+                }
+                article.put("sections", sections);
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    prefs.edit().putString("cache_article_" + id, article.toString()).apply();
+                    renderArticle(article);
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    String cached = prefs.getString("cache_article_" + id, "");
+                    if (!cached.isEmpty()) {
+                        try {
+                            renderArticle(new JSONObject(cached));
+                            toast("Showing cached article");
+                        } catch (JSONException ignored) {
+                            toast(e.getMessage() == null ? "Supabase article failed" : e.getMessage());
+                        }
+                    } else {
+                        toast(e.getMessage() == null ? "Supabase article failed" : e.getMessage());
+                    }
+                });
+            }
+        }).start();
+    }
+
+    private void saveVocabToSupabase(String body) {
+        new Thread(() -> {
+            try {
+                supabaseRaw("POST", "/rest/v1/vocab", body, true);
+            } catch (Exception ignored) {
+            }
+        }).start();
     }
 
     private JSONArray getLocalVocab() {
@@ -577,6 +700,46 @@ public class MainActivity extends Activity {
         }).start();
     }
 
+    private JSONArray supabaseArray(String method, String path, String body) throws Exception {
+        String raw = supabaseRaw(method, path, body, false);
+        return raw.trim().isEmpty() ? new JSONArray() : new JSONArray(raw);
+    }
+
+    private String supabaseRaw(String method, String path, String body, boolean write) throws Exception {
+        String base = cleanSupabaseUrl();
+        String key = cleanSupabaseAnonKey();
+        if (base.isEmpty() || key.isEmpty()) {
+            throw new IllegalStateException("Set Supabase URL and anon key first");
+        }
+        URL url = new URL(base + path);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod(method);
+        conn.setConnectTimeout(8000);
+        conn.setReadTimeout(60000);
+        conn.setRequestProperty("Accept", "application/json");
+        conn.setRequestProperty("apikey", key);
+        conn.setRequestProperty("Authorization", "Bearer " + key);
+        if (write) {
+            conn.setRequestProperty("Prefer", "return=minimal");
+        }
+        if (body != null) {
+            byte[] data = body.getBytes(StandardCharsets.UTF_8);
+            conn.setDoOutput(true);
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            conn.setRequestProperty("Content-Length", String.valueOf(data.length));
+            OutputStream out = conn.getOutputStream();
+            out.write(data);
+            out.close();
+        }
+        int code = conn.getResponseCode();
+        InputStream stream = code >= 400 ? conn.getErrorStream() : conn.getInputStream();
+        String response = readAll(stream);
+        if (code < 200 || code >= 300) {
+            throw new IllegalStateException("Supabase HTTP " + code + ": " + response);
+        }
+        return response;
+    }
+
     private String readAll(InputStream stream) throws Exception {
         if (stream == null) return "";
         BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
@@ -598,6 +761,20 @@ public class MainActivity extends Activity {
         String value = urlInput == null ? prefs.getString(KEY_BASE_URL, "") : urlInput.getText().toString().trim();
         while (value.endsWith("/")) value = value.substring(0, value.length() - 1);
         return value;
+    }
+
+    private boolean hasSupabase() {
+        return !cleanSupabaseUrl().isEmpty() && !cleanSupabaseAnonKey().isEmpty();
+    }
+
+    private String cleanSupabaseUrl() {
+        String value = supabaseUrlInput == null ? prefs.getString(KEY_SUPABASE_URL, "") : supabaseUrlInput.getText().toString().trim();
+        while (value.endsWith("/")) value = value.substring(0, value.length() - 1);
+        return value;
+    }
+
+    private String cleanSupabaseAnonKey() {
+        return supabaseKeyInput == null ? prefs.getString(KEY_SUPABASE_ANON_KEY, "") : supabaseKeyInput.getText().toString().trim();
     }
 
     private LinearLayout panel() {
