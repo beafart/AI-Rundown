@@ -1,0 +1,12 @@
+.env
+*.db
+*.sqlite
+*.sqlite3
+backend/data/
+backend/__pycache__/
+*.pyc
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+local.properties
+.DS_Store
