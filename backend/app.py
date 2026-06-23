@@ -154,7 +154,8 @@ def analyze_article(article_id: int) -> None:
 
 
 def split_sentences(text: str) -> list[str]:
-    cleaned = re.sub(r"\s+", " ", text).strip()
+    cleaned = re.sub(r"\s+\*\s+", " ", text)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
     if not cleaned:
         return []
     parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\"'])", cleaned)

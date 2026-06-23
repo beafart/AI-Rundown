@@ -66,11 +66,31 @@ def parse_newsletter(text: str) -> list[dict[str, str | int]]:
 
 def normalize(text: str) -> str:
     text = text.replace("\r", "\n")
-    text = re.sub(r"\^\*\*\[[^\]]+\]\([^)]+\)\*\*\^", " ", text)
-    text = re.sub(r"\[[^\]]+\]\([^)]+\)", " ", text)
-    text = re.sub(r"View image:\s*\([^)]+\)", " ", text, flags=re.IGNORECASE)
-    text = re.sub(r"Follow image link:\s*\([^)]+\)", " ", text, flags=re.IGNORECASE)
-    text = re.sub(r"Caption:\s*-+", " ", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"(?is)######\s*TOGETHER WITH\b.*?(?=\n-{5,}\n-{5,}\n######|\Z)",
+        "\n",
+        text,
+    )
+    text = re.sub(r"(?mi)^.*Read Online.*Sign Up.*Advertise.*$", "\n", text)
+    text = re.sub(r"(?mi)^View image:\s*\([^)]+\).*$", " ", text)
+    text = re.sub(r"(?mi)^Follow image link:\s*\([^)]+\).*$", " ", text)
+    text = re.sub(r"(?mi)^Caption:.*$", " ", text)
+    text = re.sub(
+        r"\*\*In today[’']s AI rundown:\*\*.*?\*\*LATEST DEVELOPMENTS\*\*",
+        "\nLATEST DEVELOPMENTS\n",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"(?m)^[\s\^\|\-–—_]+$", "\n", text)
+    text = re.sub(r"(?:\^\s*\|\s*)+\^?", " ", text)
+    text = re.sub(r"\^+", " ", text)
+    text = re.sub(r"-{3,}", " ", text)
+    text = re.sub(r"\*{1,3}([^*\n]+)\*{1,3}", r"\1", text)
+    text = re.sub(r"(?m)^#{2,6}\s*", "", text)
+    text = re.sub(r"[_`]+", "", text)
+    text = re.sub(r"(?mi)^\s*LATEST DEVELOPMENTS\s*$", "\n", text)
+    text = re.sub(r"\bGood morning,\s*AI enthusiasts\.\s*", "", text, flags=re.IGNORECASE)
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
